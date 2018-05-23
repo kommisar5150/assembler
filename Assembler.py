@@ -102,7 +102,7 @@ class Assembler:
                 if line is not None:
                     instruction = build.build(line)
                     if instruction is not None:
-                        masterString += instruction
+                        masterString += instruction + "\n"
 
         masterString += "\n</Text>"
         print(external_list)

@@ -348,7 +348,7 @@ class instructionBuilder:
 
             instruction = instruction + "0000" + flag + temp
 
-        # MEMR instruction
+        # MEMR instruction  todo: fix order of arguments assembled for instruction, they're not correct!
         elif line[0] == "MEMR":
 
             source = ""  # This will hold the binary value of the source to be read from
@@ -393,15 +393,70 @@ class instructionBuilder:
 
             if word[0] == "$":
                 word = word[1:]
-                source = self.translateRegisterNameToRegisterCode(word)
+                dest = self.translateRegisterNameToRegisterCode(word)
 
             else:
                 raise ValueError("Invalid operation format")
 
             instruction = instruction + width + dest + padding + source
 
+        # MEMW instruction -- This one might be a bit of a mess due to multiple cases
         elif line[0] == "MEMW":
-            None
+
+            width = line[1]
+            arg1 = line[2]  # Source
+            arg2 = line[3]  # Destination
+            potential_values = ["1", "2", "3", "4"]  # Width may only be one of these values
+            padding = "0000"
+
+            if arg1[0] == "$" and arg2[0] == "$":  # Both arguments are registers
+                instruction += "00010001"
+            elif arg1[0] == "$" and arg2[0] == "#":  # Write value in register to immediate address
+                instruction += "00100000"
+            elif arg1[0] == "#" and arg2[0] == "$":  # Write value of immediate to address in register
+                instruction += "00000000"
+            elif arg1[0] == "#" and arg2[0] == "#":  # Write value of immediate to immediate address
+                instruction += "00110000"
+            else:
+                raise ValueError("Invalid operation format")
+
+            # Parse info from arguments to assemble instruction
+            if arg1[0] == "$":
+                arg1 = arg1[1:]
+                arg1 = self.translateRegisterNameToRegisterCode(arg1)
+            if arg2[0] == "$":
+                arg2 = arg2[1:]
+                arg2 = self.translateRegisterNameToRegisterCode(arg2)
+            if arg1[0] == "#":
+                arg1 = arg1[1:]
+                arg1 = self.translateTextImmediateToImmediate(arg1)
+                arg1 = '{0:032b}'.format(arg1)
+            if arg2[0] == "#":
+                arg2 = self.translateTextImmediateToImmediate(arg2)
+                arg2 = '{0:032b}'.format(arg2)
+
+            # Get width info
+            if width[0] == "[" and width[-1] == "]":
+                width = width[1:-1]  # remove brackets and evaluate what's in the middle
+                if width in potential_values:
+                    width = self.translateTextImmediateToImmediate(width)
+                    width = '{0:04b}'.format(width)
+                else:  # Then either it's an invalid argument or a width not supported
+                    raise ValueError("Invalid operation format")
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            if instruction == "00010001":  # InsRegReg
+                instruction = instruction + width + arg1 + padding + arg2
+            elif instruction == "00100000":  # InsRegImm
+                instruction = instruction + width + arg1 + arg2
+            elif instruction == "00000000":  # InsImmReg
+                instruction = instruction + width + arg2 + arg1
+            else:  # InsImmImm
+                instruction = instruction + padding + width + arg1 + arg2
+
+
         elif line[0] == "MUL":
             None
         elif line[0] == "NOP":
