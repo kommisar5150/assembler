@@ -90,11 +90,11 @@ class Assembler:
 
 
         '''
-        This block is used to read each line and determine if an instruction has been found.
+        This block reads each line and determines if an instruction has been found.
         
         
         '''
-        buildInstruction = Instruction(skipValidation=True)
+        masterString += "<Text>\n"
         for line in file_lines:
             if line[0] != "\n":
                 line = line.split()
@@ -102,11 +102,9 @@ class Assembler:
                 if line is not None:
                     instruction = build.build(line)
                     if instruction is not None:
-                        masterString += "\n" + instruction
+                        masterString += instruction
 
-
-
-
+        masterString += "\n</Text>"
         print(external_list)
         print(internal_list)
         file = open(outputFile, mode="w")

@@ -285,12 +285,12 @@ class instructionBuilder:
                 word = word[1:-1]  # remove brackets and evaluate what's in the middle
                 word = word.lower()
                 if len(word) < 4 or len(word) == 0:
-                    for flag in word:
-                        if flag == "e":
+                    for flagvalue in word:
+                        if flagvalue == "e":
                             e = "1"
-                        elif flag == "l":
+                        elif flagvalue == "l":
                             l = "1"
-                        elif flag == "h":
+                        elif flagvalue == "h":
                             h = "1"
                         else:
                             raise ValueError("Invalid operation format")
