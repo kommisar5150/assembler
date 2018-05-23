@@ -456,35 +456,284 @@ class instructionBuilder:
             else:  # InsImmImm
                 instruction = instruction + padding + width + arg1 + arg2
 
-
+        # MUL instruction
         elif line[0] == "MUL":
-            None
+            word = line[1]
+            word2 = line[2]
+            instruction += "10010100"
+
+            if word[0] == "$" and word2[0] == "$":
+                word = word[1:]
+                word2 = word2[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                word2 = self.translateRegisterNameToRegisterCode(word2)
+                instruction = instruction + str(word) + str(word2)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+        # NOP instruction
         elif line[0] == "NOP":
-            None
+            instruction += "11111111"
+
+        # NOT instruction
         elif line[0] == "NOT":
-            None
+            instruction += "011100000000"
+            word = line[1]
+
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # OR instruction
         elif line[0] == "OR":
-            None
+            word = line[1]
+
+            if word[0] == "#":  # immediate value
+                instruction += "01100010"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                instruction += str(word)
+
+            elif word[0] == "$":  # register value
+                instruction += "10011000"
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            word = line[2]  # check second value to be sure it's a register
+
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # POP instruction
         elif line[0] == "POP":
-            None
+            word = line[0]
+            instruction += "011101000000"
+
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # PUSH instruction
         elif line[0] == "PUSH":
-            None
+            word = line[1]
+
+            if word[0] == "#":  # immediate value
+                instruction += "10000001"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                instruction += str(word)
+
+            elif word[0] == "$":  # register value
+                instruction += "011100110000"
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:  # assume it's a symbol
+                instruction += "10000001"
+                instruction += str(word)
+
+        # RET instruction
         elif line[0] == "RET":
-            None
+            instruction += "11110000"
+
+        # STSTOR instruction
         elif line[0] == "SFSTOR":
-            None
+            temp = ""  # This will hold the binary instruction of the second argument
+            e, l, h, flag = "0", "0", "0", "0"  # Flag initial value
+            word = line[2]
+            padding = ""
+
+            # since instruction relies on argument after flags, we evaluate this first
+            if word[0] == "#":
+                word = word[1:]
+                instruction += "01000010"
+                word = self.translateTextImmediateToImmediate(word)
+                temp = '{0:032b}'.format(word)
+                padding = "0000"
+
+            elif word[0] == "$":
+                word = word[1:]
+                instruction += "01010010"
+                temp = self.translateRegisterNameToRegisterCode(word)
+
+            else:  # assume it's a symbol
+                instruction += "01000010"
+                temp = word
+
+            word = line[1]
+
+            if word[0] == "<" and word[-1] == ">":
+                word = word[1:-1]  # remove brackets and evaluate what's in the middle
+                word = word.lower()
+                if len(word) < 4 or len(word) == 0:
+                    for flagvalue in word:
+                        if flagvalue == "e":
+                            e = "1"
+                        elif flagvalue == "l":
+                            l = "1"
+                        elif flagvalue == "h":
+                            h = "1"
+                        else:
+                            raise ValueError("Invalid operation format")
+                else:
+                    raise ValueError("Invalid operation format")
+
+                flag = flag + e + l + h  # Concatenate results together to give flag value
+            else:
+                raise ValueError("Invalid operation format")
+
+            instruction = instruction + padding + flag + temp
+
+        # SIVR instruction
         elif line[0] == "SIVR":
-            None
+            word = line[0]
+            instruction += "011101010000"
+
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # SHL instruction
         elif line[0] == "SHL":
-            None
+            word = line[1]
+
+            if word[0] == "#":
+                instruction += "01100101"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                word += "0000"
+                instruction += str(word)
+
+            elif word[0] == "$":
+                word = word[1:]
+                instruction += "10010110"
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            word = line[2]  # check second value to be sure it's a register
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # SHR instruction
         elif line[0] == "SHR":
-            None
+            word = line[1]
+
+            if word[0] == "#":
+                instruction += "01100100"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                word += "0000"
+                instruction += str(word)
+
+            elif word[0] == "$":
+                word = word[1:]
+                instruction += "10011001"
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            word = line[2]  # check second value to be sure it's a register
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # SNT instruction
         elif line[0] == "SNT":
             None
+
+        # SUB instruction
         elif line[0] == "SUB":
-            None
+            word = line[1]
+
+            if word[0] == "#":
+                instruction += "01100111"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                word += "0000"
+                instruction += str(word)
+
+            elif word[0] == "$":
+                word = word[1:]
+                instruction += "10010011"
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            word = line[2]  # check second value to be sure it's a register
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
+        # XOR instruction
         elif line[0] == "XOR":
-            None
+            word = line[1]
+
+            if word[0] == "#":
+                instruction += "01100011"
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                word = '{0:032b}'.format(word)
+                word += "0000"
+                instruction += str(word)
+
+            elif word[0] == "$":
+                word = word[1:]
+                instruction += "10010000"
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+
+            else:
+                raise ValueError("Invalid operation format")
+
+            word = line[2]  # check second value to be sure it's a register
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                instruction += str(word)
+            else:
+                raise ValueError("Invalid operation format")
+
         else:
             print("maybe comment or label")
             # raise ValueError("Invalid operation format")
