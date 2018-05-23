@@ -97,6 +97,7 @@ class Assembler:
         masterString += "<Text>\n"
         for line in file_lines:
             if line[0] != "\n":
+                masterString += "\n" + line
                 line = line.split()
                 print(line)
                 if line is not None:

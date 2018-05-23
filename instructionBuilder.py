@@ -172,6 +172,7 @@ class instructionBuilder:
                 word = word[1:]
                 instruction += "01110010"
                 word = self.translateRegisterNameToRegisterCode(word)
+                instruction += "0000"
                 instruction += str(word)
 
             else:  # assume it's a symbol
@@ -252,12 +253,13 @@ class instructionBuilder:
                 word = word[1:]
                 instruction += "01110110"
                 word = self.translateRegisterNameToRegisterCode(word)
+                instruction += "0000"
                 instruction += str(word)
 
             else:
                 raise ValueError("Invalid operation format")
 
-        # JMP instruction
+        # JMP instruction todo: fix formatting for this instruction (check padding and flag format in formdescription)
         elif line[0] == "JMP":
             temp = ""  # This will hold the binary instruction of the second argument
             e, l, h, flag = "0", "0", "0", "0"  # Flag initial value
@@ -432,6 +434,7 @@ class instructionBuilder:
                 arg1 = self.translateTextImmediateToImmediate(arg1)
                 arg1 = '{0:032b}'.format(arg1)
             if arg2[0] == "#":
+                arg2 = arg2[1:]
                 arg2 = self.translateTextImmediateToImmediate(arg2)
                 arg2 = '{0:032b}'.format(arg2)
 
@@ -519,7 +522,7 @@ class instructionBuilder:
 
         # POP instruction
         elif line[0] == "POP":
-            word = line[0]
+            word = line[1]
             instruction += "011101000000"
 
             if word[0] == "$":
@@ -604,7 +607,7 @@ class instructionBuilder:
 
         # SIVR instruction
         elif line[0] == "SIVR":
-            word = line[0]
+            word = line[1]
             instruction += "011101010000"
 
             if word[0] == "$":
