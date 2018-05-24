@@ -59,16 +59,29 @@ __maintainer__ = "CSE"
 __status__ = "Dev"
 
 
+
 class instructionBuilder:
+
+    relativeAddressCounter = 0
 
     def build(self, text):
         text = text.upper()
         line = text.split()
         instruction = ""
+        offset = 0
         data_identifier = line[0]  # We'll use this at the end to check if we're dealing with dataAlpha/numeric/memref
 
+        # first off, we need to determine if this line has a label or global label to be referenced
+        if data_identifier[-1] == ":":
+            label = data_identifier[:-1]
+            return label, self.relativeAddressCounter, 1
+
+        elif data_identifier == ".GLOBAL":
+            label = line[1]
+            return label, self.relativeAddressCounter, 2
+
         # if the instruction is MOV
-        if line[0] == "MOV":
+        elif line[0] == "MOV":
             word = line[1]
 
             if word[0] == "#":  # immediate value
@@ -77,16 +90,19 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 word = '{0:032b}'.format(word)
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":  # register value
                 instruction += "10011011"
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:  # assume it's a symbol
                 instruction += "01100000"
-                instruction += str(word)
+                instruction += ":" + str(word) + ":"
+                offset = 6
 
             word = line[2]  # check second value to be sure it's a register
 
@@ -98,8 +114,9 @@ class instructionBuilder:
                 raise ValueError("Invalid operation format")
 
         # ACTI instruction
-        if line[0] == "ACTI":
+        elif line[0] == "ACTI":
             instruction += "11110001"
+            offset = 1
 
         # ADD instruction
         elif line[0] == "ADD":
@@ -112,12 +129,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10010010"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -141,12 +160,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10010111"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -170,6 +191,7 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 word = '{0:032b}'.format(word)
                 instruction += str(word)
+                offset = 5
 
             elif word[0] == "$":
                 word = word[1:]
@@ -177,10 +199,12 @@ class instructionBuilder:
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += "0000"
                 instruction += str(word)
+                offset = 2
 
             else:  # assume it's a symbol
                 instruction += "10000010"
                 instruction += str(word)
+                offset = 5
 
         # CMP instruction
         elif line[0] == "CMP":
@@ -193,12 +217,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10011010"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -215,6 +241,7 @@ class instructionBuilder:
         # DACTI instruction
         elif line[0] == "DACTI":
             instruction += "11110010"
+            offset = 1
 
         # DIV instruction
         elif line[0] == "DIV":
@@ -225,6 +252,7 @@ class instructionBuilder:
                 instruction += "10010101"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
             else:
                 raise ValueError("Invalid operation format")
 
@@ -240,6 +268,7 @@ class instructionBuilder:
         # HIRET instruction
         elif line[0] == "HIRET":
             instruction += "11110011"
+            offset = 1
 
         # INT instruction
         elif line[0] == "INT":
@@ -251,6 +280,7 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 word = '{0:032b}'.format(word)
                 instruction += str(word)
+                offset = 5
 
             elif word[0] == "$":
                 word = word[1:]
@@ -258,6 +288,7 @@ class instructionBuilder:
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += "0000"
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -276,16 +307,19 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 temp = '{0:032b}'.format(word)
                 padding = "0000"
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "01010001"
                 temp = self.translateRegisterNameToRegisterCode(word)
+                offset = 2
 
             else:  # assume it's a symbol
                 instruction += "01000001"
                 temp = word
                 padding = "0000"
+                offset = 6
 
             word = line[1]
 
@@ -294,11 +328,11 @@ class instructionBuilder:
                 word = word.lower()
                 if len(word) < 4 or len(word) == 0:
                     for flagvalue in word:
-                        if flagvalue == "e":
+                        if flagvalue == "E":
                             e = "1"
-                        elif flagvalue == "l":
+                        elif flagvalue == "L":
                             l = "1"
-                        elif flagvalue == "h":
+                        elif flagvalue == "H":
                             h = "1"
                         else:
                             raise ValueError("Invalid operation format")
@@ -325,11 +359,13 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 temp = '{0:032b}'.format(word)
                 padding = "0000"
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "01010000"
                 temp = self.translateRegisterNameToRegisterCode(word)
+                offset = 2
 
             else:  # Unlike JMP, we can't have a label since the value must be an offset
                 raise ValueError("Invalid operation format")
@@ -340,11 +376,11 @@ class instructionBuilder:
                 word = word[1:-1]  # remove brackets and evaluate what's in the middle
                 if len(word) < 4:
                     for flagvalue in word:
-                        if flagvalue == "e":
+                        if flagvalue == "E":
                             e = "1"
-                        elif flagvalue == "l":
+                        elif flagvalue == "L":
                             l = "1"
-                        elif flagvalue == "h":
+                        elif flagvalue == "H":
                             h = "1"
                         else:
                             raise ValueError("Invalid operation format")
@@ -375,12 +411,14 @@ class instructionBuilder:
                 instruction += "00000001"
                 word = self.translateTextImmediateToImmediate(word)
                 source = '{0:032b}'.format(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "00010000"
                 source = self.translateRegisterNameToRegisterCode(word)
                 padding = "0000"
+                offset = 3
 
             else:
                 raise ValueError("Invalid operation format")
@@ -424,12 +462,16 @@ class instructionBuilder:
 
             if arg1[0] == "$" and arg2[0] == "$":  # Both arguments are registers
                 instruction += "00010001"
+                offset = 3
             elif arg1[0] == "$" and arg2[0] == "#":  # Write value in register to immediate address
                 instruction += "00100000"
+                offset = 6
             elif arg1[0] == "#" and arg2[0] == "$":  # Write value of immediate to address in register
                 instruction += "00000000"
+                offset = 6
             elif arg1[0] == "#" and arg2[0] == "#":  # Write value of immediate to immediate address
                 instruction += "00110000"
+                offset = 10
             else:
                 raise ValueError("Invalid operation format")
 
@@ -482,6 +524,7 @@ class instructionBuilder:
                 word = self.translateRegisterNameToRegisterCode(word)
                 word2 = self.translateRegisterNameToRegisterCode(word2)
                 instruction = instruction + str(word) + str(word2)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -489,6 +532,7 @@ class instructionBuilder:
         # NOP instruction
         elif line[0] == "NOP":
             instruction += "11111111"
+            offset = 1
 
         # NOT instruction
         elif line[0] == "NOT":
@@ -499,6 +543,7 @@ class instructionBuilder:
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
             else:
                 raise ValueError("Invalid operation format")
 
@@ -512,12 +557,14 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 word = '{0:032b}'.format(word)
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":  # register value
                 instruction += "10011000"
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -540,6 +587,7 @@ class instructionBuilder:
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
             else:
                 raise ValueError("Invalid operation format")
 
@@ -553,20 +601,24 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 word = '{0:032b}'.format(word)
                 instruction += str(word)
+                offset = 5
 
             elif word[0] == "$":  # register value
                 instruction += "011100110000"
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:  # assume it's a symbol
                 instruction += "10000001"
                 instruction += str(word)
+                offset = 5
 
         # RET instruction
         elif line[0] == "RET":
             instruction += "11110000"
+            offset = 1
 
         # STSTOR instruction
         elif line[0] == "SFSTOR":
@@ -582,15 +634,18 @@ class instructionBuilder:
                 word = self.translateTextImmediateToImmediate(word)
                 temp = '{0:032b}'.format(word)
                 padding = "0000"
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "01010010"
                 temp = self.translateRegisterNameToRegisterCode(word)
+                offset = 2
 
             else:  # assume it's a symbol
                 instruction += "01000010"
                 temp = word
+                offset = 6
 
             word = line[1]
 
@@ -599,11 +654,11 @@ class instructionBuilder:
                 word = word.lower()
                 if len(word) < 4 or len(word) == 0:
                     for flagvalue in word:
-                        if flagvalue == "e":
+                        if flagvalue == "E":
                             e = "1"
-                        elif flagvalue == "l":
+                        elif flagvalue == "L":
                             l = "1"
-                        elif flagvalue == "h":
+                        elif flagvalue == "H":
                             h = "1"
                         else:
                             raise ValueError("Invalid operation format")
@@ -625,6 +680,7 @@ class instructionBuilder:
                 word = word[1:]
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
             else:
                 raise ValueError("Invalid operation format")
 
@@ -639,12 +695,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10010110"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -668,12 +726,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10011001"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -701,12 +761,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10010011"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -730,12 +792,14 @@ class instructionBuilder:
                 word = '{0:032b}'.format(word)
                 word += "0000"
                 instruction += str(word)
+                offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
                 instruction += "10010000"
                 word = self.translateRegisterNameToRegisterCode(word)
                 instruction += str(word)
+                offset = 2
 
             else:
                 raise ValueError("Invalid operation format")
@@ -750,20 +814,23 @@ class instructionBuilder:
 
         elif data_identifier[0] == ";":
             pass  # it's just a comment
+
         elif line[0] == ".DATAALPHA":
             line = line[1:]
             line = " ".join(line)
-            print(line)
+            instruction += line
+
         elif line[0] == ".DATANUMERIC":
-            pass
+            instruction += str(line[1])
+
         elif line[0] == ".DATAMEMREF":
             pass
+
         else:
+            raise ValueError("Invalid operation format")
+        self.relativeAddressCounter += offset
 
-            print("maybe comment or label")
-            # raise ValueError("Invalid operation format")
-
-        return instruction
+        return instruction, self.relativeAddressCounter, 0
 
     def translateTextImmediateToImmediate(self, textImmediate: str=""):
         """

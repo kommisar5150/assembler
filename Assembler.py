@@ -52,7 +52,6 @@ class Assembler:
         size = info.st_size
 
         # variables used to assemble file.
-        masterString += "<AssemblySize>" + str(size) + "</AssemblySize>\n\n"
         global_list = []
         external_list = []
         internal_list = []
@@ -63,6 +62,7 @@ class Assembler:
         f = file.read()
         file.close()
 
+        '''
         # pattern matching to find global functions (external symbols)
         globalvars = re.findall(r"\.global\s[\w.-]+\n", f)
         for word in globalvars:
@@ -78,35 +78,50 @@ class Assembler:
                 external_list.append(word)
             else:
                 internal_list.append(word)
+        '''
+
+        offset = 0
+        masterString += "<Text>\n"
+        for line in file_lines:
+            line = line.upper()
+            if line[0] != "\n":
+                if line is not None:
+                    instruction, offset, label_flag = build.build(line)
+                    if label_flag == 0:
+                        masterString += instruction + "\n"
+                    elif label_flag == 1:
+                        label_tuple = (instruction, offset)
+                        internal_list.append(label_tuple)
+                        if instruction in global_list:
+                            external_list.append(label_tuple)
+                    elif label_flag == 2:
+                        global_list.append(instruction)
+                    else:
+                        print("Something went horribly wrong")
+
+        masterString += "</Text>"
 
         # builds the output file by extracting and printing each symbol into its appropriate category.
-        masterString += "<ExternalSymbols>\n"
+        xmlstring = "<AssemblySize>" + str(size) + "</AssemblySize>\n<ExternalSymbols>\n"
         for word in external_list:
-            masterString += "\t<refName>" + word + "</refName>\n"
+            xmlstring += "\t<refName>" + word[0] + "</refName>\n"
+            xmlstring += "\t<refAdd>" + str(word[1]) + "</refAdd>\n"
 
-        masterString += "\n<InternalSymbols>\n"
+        xmlstring += "</ExternalSymbols>\n<InternalSymbols>\n"
         for word in internal_list:
-            masterString += "\t<refName>" + word + "</refName>\n"
-
+            xmlstring += "\t<refName>" + word[0] + "</refName>\n"
+            xmlstring += "\t<refAdd>" + str(word[1]) + "</refAdd>\n"
+        xmlstring += "</InternalSymbols>\n"
 
         '''
         This block reads each line and determines if an instruction has been found.
         
         
         '''
-        masterString += "<Text>\n"
-        for line in file_lines:
-            if line[0] != "\n":
-                masterString += "\n" + line
-                if line is not None:
-                    instruction = build.build(line)
-                    if instruction is not None:
-                        masterString += instruction + "\n"
-
-        masterString += "\n</Text>"
+        xmlstring += masterString
         print(external_list)
         print(internal_list)
         file = open(outputFile, mode="w")
-        file.write(masterString)
+        file.write(xmlstring)
         file.close()
 
