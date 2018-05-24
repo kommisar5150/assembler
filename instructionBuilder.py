@@ -63,6 +63,7 @@ class instructionBuilder:
 
     def build(self, line):
         instruction = ""
+        data_identifier = line[0]  # We'll use this at the end to check if we're dealing with dataAlpha/numeric/memref
 
         # if the instruction is MOV
         if line[0] == "MOV":
@@ -259,11 +260,12 @@ class instructionBuilder:
             else:
                 raise ValueError("Invalid operation format")
 
-        # JMP instruction todo: fix formatting for this instruction (check padding and flag format in formdescription)
+        # JMP instruction
         elif line[0] == "JMP":
             temp = ""  # This will hold the binary instruction of the second argument
             e, l, h, flag = "0", "0", "0", "0"  # Flag initial value
             word = line[2]
+            padding = ""
 
             # since instruction relies on argument after flags, we evaluate this first
             if word[0] == "#":
@@ -271,6 +273,7 @@ class instructionBuilder:
                 instruction += "01000001"
                 word = self.translateTextImmediateToImmediate(word)
                 temp = '{0:032b}'.format(word)
+                padding = "0000"
 
             elif word[0] == "$":
                 word = word[1:]
@@ -280,6 +283,7 @@ class instructionBuilder:
             else:  # assume it's a symbol
                 instruction += "01000001"
                 temp = word
+                padding = "0000"
 
             word = line[1]
 
@@ -303,24 +307,26 @@ class instructionBuilder:
             else:
                 raise ValueError("Invalid operation format")
 
-            instruction = instruction + "0000" + flag + temp
+            instruction = instruction + padding + flag + temp
 
         # JMPR instruction
         elif line[0] == "JMPR":
             temp = ""  # This will hold the binary instruction of the second argument
             e, l, h, flag = "0", "0", "0", "0"  # Flag initial value
             word = line[2]
+            padding = ""
 
             # since instruction relies on argument after flags, we evaluate this first
             if word[0] == "#":
                 word = word[1:]
-                instruction += "01000001"
+                instruction += "01000000"
                 word = self.translateTextImmediateToImmediate(word)
                 temp = '{0:032b}'.format(word)
+                padding = "0000"
 
             elif word[0] == "$":
                 word = word[1:]
-                instruction += "01010001"
+                instruction += "01010000"
                 temp = self.translateRegisterNameToRegisterCode(word)
 
             else:  # Unlike JMP, we can't have a label since the value must be an offset
@@ -331,12 +337,12 @@ class instructionBuilder:
             if word[0] == "<" and word[-1] == ">":
                 word = word[1:-1]  # remove brackets and evaluate what's in the middle
                 if len(word) < 4:
-                    for flag in word:
-                        if flag == "e":
+                    for flagvalue in word:
+                        if flagvalue == "e":
                             e = "1"
-                        elif flag == "l":
+                        elif flagvalue == "l":
                             l = "1"
-                        elif flag == "h":
+                        elif flagvalue == "h":
                             h = "1"
                         else:
                             raise ValueError("Invalid operation format")
@@ -348,9 +354,9 @@ class instructionBuilder:
             else:
                 raise ValueError("Invalid operation format")
 
-            instruction = instruction + "0000" + flag + temp
+            instruction = instruction + padding + flag + temp
 
-        # MEMR instruction  todo: fix order of arguments assembled for instruction, they're not correct!
+        # MEMR instruction
         elif line[0] == "MEMR":
 
             source = ""  # This will hold the binary value of the source to be read from
@@ -364,13 +370,13 @@ class instructionBuilder:
             # since instruction relies on argument after width, we evaluate this first
             if word[0] == "#":
                 word = word[1:]
-                instruction += "01000001"
+                instruction += "00000001"
                 word = self.translateTextImmediateToImmediate(word)
                 source = '{0:032b}'.format(word)
 
             elif word[0] == "$":
                 word = word[1:]
-                instruction += "01010001"
+                instruction += "00010000"
                 source = self.translateRegisterNameToRegisterCode(word)
                 padding = "0000"
 
@@ -400,7 +406,10 @@ class instructionBuilder:
             else:
                 raise ValueError("Invalid operation format")
 
-            instruction = instruction + width + dest + padding + source
+            if instruction == "00000001":  # insImmReg
+                instruction = instruction + width + dest + source
+            else:  # insRegReg
+                instruction = instruction + width + source + padding + dest
 
         # MEMW instruction -- This one might be a bit of a mess due to multiple cases
         elif line[0] == "MEMW":
@@ -737,7 +746,10 @@ class instructionBuilder:
             else:
                 raise ValueError("Invalid operation format")
 
-        else:
+        elif data_identifier[0] == ";":
+            pass  # it's just a comment
+        elif data_identifier[0] == ".":
+
             print("maybe comment or label")
             # raise ValueError("Invalid operation format")
 
