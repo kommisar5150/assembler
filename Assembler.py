@@ -98,8 +98,6 @@ class Assembler:
         for line in file_lines:
             if line[0] != "\n":
                 masterString += "\n" + line
-                line = line.split()
-                print(line)
                 if line is not None:
                     instruction = build.build(line)
                     if instruction is not None:

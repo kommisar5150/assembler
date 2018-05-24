@@ -61,7 +61,9 @@ __status__ = "Dev"
 
 class instructionBuilder:
 
-    def build(self, line):
+    def build(self, text):
+        text = text.upper()
+        line = text.split()
         instruction = ""
         data_identifier = line[0]  # We'll use this at the end to check if we're dealing with dataAlpha/numeric/memref
 
@@ -748,7 +750,15 @@ class instructionBuilder:
 
         elif data_identifier[0] == ";":
             pass  # it's just a comment
-        elif data_identifier[0] == ".":
+        elif line[0] == ".DATAALPHA":
+            line = line[1:]
+            line = " ".join(line)
+            print(line)
+        elif line[0] == ".DATANUMERIC":
+            pass
+        elif line[0] == ".DATAMEMREF":
+            pass
+        else:
 
             print("maybe comment or label")
             # raise ValueError("Invalid operation format")
