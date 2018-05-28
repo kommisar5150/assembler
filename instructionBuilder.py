@@ -49,6 +49,7 @@ from Configuration import REGISTER_A, \
                           REGISTER_O, \
                           REGISTER_P, \
                           REGISTER_S
+import struct
 
 __author__ = "CSE"
 __copyright__ = "Copyright 2018, CSE"
@@ -65,11 +66,12 @@ class instructionBuilder:
     relativeAddressCounter = 0
 
     def build(self, text):
+
         text = text.upper()
         line = text.split()
-        instruction = ""
+        instruction = b""
         offset = 0
-        data_identifier = line[0]  # We'll use this at the end to check if we're dealing with dataAlpha/numeric/memref
+        data_identifier = line[0]  # used for special identifiers such as .dataAlpha, comments etc.
 
         # first off, we need to determine if this line has a label or global label to be referenced
         if data_identifier[-1] == ":":
@@ -80,62 +82,28 @@ class instructionBuilder:
             label = line[1]
             return label, self.relativeAddressCounter, 2
 
-        # if the instruction is MOV
-        elif line[0] == "MOV":
-            word = line[1]
-
-            if word[0] == "#":  # immediate value
-                instruction += "01100000"
-                word = word[1:]
-                word = self.translateTextImmediateToImmediate(word)
-                word = '{0:032b}'.format(word)
-                instruction += str(word)
-                offset = 6
-
-            elif word[0] == "$":  # register value
-                instruction += "10011011"
-                word = word[1:]
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
-                offset = 2
-
-            else:  # assume it's a symbol
-                instruction += "01100000"
-                instruction += ":" + str(word) + ":"
-                offset = 6
-
-            word = line[2]  # check second value to be sure it's a register
-
-            if word[0] == "$":
-                word = word[1:]
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
-            else:
-                raise ValueError("Invalid operation format")
-
         # ACTI instruction
         elif line[0] == "ACTI":
-            instruction += "11110001"
+            instruction += bytes((0b11110001,))
             offset = 1
 
         # ADD instruction
         elif line[0] == "ADD":
             word = line[1]
+            insregreg = 0
 
             if word[0] == "#":
-                instruction += "01100110"
-                word = word[1:]
-                word = self.translateTextImmediateToImmediate(word)
-                word = '{0:032b}'.format(word)
-                word += "0000"
-                instruction += str(word)
+                instruction += bytes((0b01100110,))
+                arg1 = word[1:]
+                arg1 = self.translateTextImmediateToImmediate(arg1)
+                arg1 = arg1.to_bytes(4, byteorder='big')
                 offset = 6
 
             elif word[0] == "$":
-                word = word[1:]
-                instruction += "10010010"
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
+                arg1 = word[1:]
+                instruction += bytes((0b10010010,))
+                arg1 = self.translateRegisterNameToRegisterCode(arg1)
+                insregreg = 1
                 offset = 2
 
             else:
@@ -143,30 +111,34 @@ class instructionBuilder:
 
             word = line[2]  # check second value to be sure it's a register
             if word[0] == "$":
-                word = word[1:]
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
+                arg2 = word[1:]
+                arg2 = self.translateRegisterNameToRegisterCode(arg2)
+                if insregreg:
+                    args = (arg1 << 4) + arg2
+                    instruction += bytes((args,))
+                else:
+                    instruction += arg1 + bytes((arg2,))
+
             else:
                 raise ValueError("Invalid operation format")
 
         # AND instruction
         elif line[0] == "AND":
             word = line[1]
+            insregreg = 0
 
             if word[0] == "#":
                 word = word[1:]
-                instruction += "01100001"
-                word = self.translateTextImmediateToImmediate(word)
-                word = '{0:032b}'.format(word)
-                word += "0000"
-                instruction += str(word)
+                instruction += bytes((0b01100001,))
+                arg1 = self.translateTextImmediateToImmediate(word)
+                arg1 = arg1.to_bytes(4, byteorder='big')
                 offset = 6
 
             elif word[0] == "$":
                 word = word[1:]
-                instruction += "10010111"
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
+                instruction += bytes((0b10010111,))
+                arg1 = self.translateRegisterNameToRegisterCode(word)
+                insregreg = 1
                 offset = 2
 
             else:
@@ -176,8 +148,12 @@ class instructionBuilder:
 
             if word[0] == "$":
                 word = word[1:]
-                word = self.translateRegisterNameToRegisterCode(word)
-                instruction += str(word)
+                arg2 = self.translateRegisterNameToRegisterCode(word)
+                if insregreg:
+                    args = (arg1 << 4) + arg2
+                    instruction += bytes((args,))
+                else:
+                    instruction += arg1 + bytes((arg2,))
             else:
                 raise ValueError("Invalid operation format")
 
@@ -512,6 +488,49 @@ class instructionBuilder:
             else:  # InsImmImm
                 instruction = instruction + padding + width + arg1 + arg2
 
+        # MOV instruction
+        elif line[0] == "MOV":
+            word = line[1]
+            insregreg = 0
+            arg1 = 0
+            arg2 = 0
+
+            if word[0] == "#":  # immediate value
+                instruction += bytes((0b01100000,))
+                word = word[1:]
+                word = self.translateTextImmediateToImmediate(word)
+                print("value before conversion: " + str(word))
+                word = word.to_bytes(4, byteorder='big')
+                instruction += word
+                print("and after conversion: " + str(word))
+                offset = 6
+
+            elif word[0] == "$":  # register value
+                instruction += bytes((0b10011011,))
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                arg1 = word
+                insregreg = 1
+                offset = 2
+
+            else:  # assume it's a symbol
+                instruction += bytes((0b01100000,))
+                instruction += b":" + word.encode("utf-8") + b":"
+                offset = 6
+
+            word = line[2]  # check second value to be sure it's a register
+
+            if word[0] == "$":
+                word = word[1:]
+                word = self.translateRegisterNameToRegisterCode(word)
+                if insregreg:
+                    args = (arg1 << 4) + word
+                    instruction += bytes((args,))
+                else:
+                    instruction += bytes((word,))
+            else:
+                raise ValueError("Invalid operation format")
+
         # MUL instruction
         elif line[0] == "MUL":
             word = line[1]
@@ -818,16 +837,24 @@ class instructionBuilder:
         elif line[0] == ".DATAALPHA":
             line = line[1:]
             line = " ".join(line)
-            instruction += line
+            instruction += line.encode("utf-8")
+            offset = len(instruction) + 1
+            instruction += b"\x00"
+            print(instruction)
+            print(offset)
 
         elif line[0] == ".DATANUMERIC":
             instruction += str(line[1])
+            offset = 4
 
         elif line[0] == ".DATAMEMREF":
-            pass
+            instruction += str(line[1])
+            offset = 4
 
         else:
             raise ValueError("Invalid operation format")
+
+        # Add the calculated offset of the current instruction to cumulative length of file
         self.relativeAddressCounter += offset
 
         return instruction, self.relativeAddressCounter, 0
@@ -925,7 +952,7 @@ class instructionBuilder:
             registerCode = REGISTER_S
         else:
             raise ValueError("Invalid register provided. '{}' seen as input, expect A, B, C or S.".format(registerName))
-
+        registerCode = registerCode & 0xFF
         return registerCode
 
     '''

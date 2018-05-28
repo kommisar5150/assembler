@@ -32,96 +32,85 @@ from Configuration import REGISTER_A, \
                           REGISTER_O, \
                           REGISTER_P, \
                           REGISTER_S
+import struct
 
 class Assembler:
 
     def __init__(self, inputFile=None, outputFile=None):
 
-        '''
+        build = instructionBuilder()  # instructionBuilder object which will return the binary code for instructions
+        masterString = b""  # String that will eventually be our output file
+        xmlstring = b""  # String that will contain the "xml" data at the beginning of the .o file
+        global_list = []  # Temporary list to hold the names of global(external) symbols
+        external_list = []  # Master list of all external symbols to be used by linker
+        internal_list = []  # # Master list of all internal symbols
+        offset = 0  # Offset used to calculate a label's offset from the beginning of the file
 
-        This block sorts out the internal and external symbols, and adds them to the
-        output string.
-
-        :param inputFile:
-        :param outputFile:
-        '''
-
-        build = instructionBuilder()
-        masterString = ""  # String that will eventually be our output file
-        info = os.stat(inputFile)
-        size = info.st_size
-
-        # variables used to assemble file.
-        global_list = []
-        external_list = []
-        internal_list = []
         file = open(inputFile, mode="r")
         file_lines = file.readlines()
         file.close()
-        file = open(inputFile, mode="r")
-        f = file.read()
-        file.close()
+
 
         '''
-        # pattern matching to find global functions (external symbols)
-        globalvars = re.findall(r"\.global\s[\w.-]+\n", f)
-        for word in globalvars:
-            word = word[8:-1]
-            global_list.append(word)
-
-        # pattern matching to find ALL symbols. If symbol is in global function list, add to external list.
-        # otherwise, add to internal list.
-        match = re.findall(r'[\w.-]+:\n', f)
-        for word in match:
-            word = word[:-2]
-            if word in global_list:
-                external_list.append(word)
-            else:
-                internal_list.append(word)
+        This block assembles the binary data itself. It will parse each line individually and extract the info needed:
+        1.If the label flag is set to 0, it's a regular instruction, string, number, of memref.
+        2.If the label flag is set to 1, it's an internal symbol.
+        3.If the label flag is set to 2, it's an external symbol.
+        In cases 2 and 3, the symbols are added to their respective lists along with their memory location.
+        Memory locations are relative to the beginning of the file. Instructions and data are given set lengths.
+        Internal and external symbol lists contain tuples containing the symbol name, and its offset. 
+        These will be used to fill the .o file information before the binary data.
         '''
 
-        offset = 0
-        masterString += "<Text>\n"
+        masterString += b"<Text>"
+
         for line in file_lines:
+
             line = line.upper()
+
             if line[0] != "\n":
+
                 if line is not None:
                     instruction, offset, label_flag = build.build(line)
+
                     if label_flag == 0:
-                        masterString += instruction + "\n"
+                        masterString += instruction
+
                     elif label_flag == 1:
                         label_tuple = (instruction, offset)
                         internal_list.append(label_tuple)
                         if instruction in global_list:
                             external_list.append(label_tuple)
+
                     elif label_flag == 2:
                         global_list.append(instruction)
+
                     else:
                         print("Something went horribly wrong")
 
-        masterString += "</Text>"
+        masterString += b"</Text>"
 
         # builds the output file by extracting and printing each symbol into its appropriate category.
-        xmlstring = "<AssemblySize>" + str(size) + "</AssemblySize>\n<ExternalSymbols>\n"
+        xmlstring = b"<AssemblySize>" + struct.pack(">I", build.relativeAddressCounter) + \
+                    b"</AssemblySize><ExternalSymbols>"
+
         for word in external_list:
-            xmlstring += "\t<refName>" + word[0] + "</refName>\n"
-            xmlstring += "\t<refAdd>" + str(word[1]) + "</refAdd>\n"
+            xmlstring += b"<refName>" + word[0].encode("utf-8") + b"</refName>"
+            xmlstring += b"<refAdd>" + struct.pack(">I", word[1]) + b"</refAdd>"
 
-        xmlstring += "</ExternalSymbols>\n<InternalSymbols>\n"
+        xmlstring += b"</ExternalSymbols><InternalSymbols>"
+
         for word in internal_list:
-            xmlstring += "\t<refName>" + word[0] + "</refName>\n"
-            xmlstring += "\t<refAdd>" + str(word[1]) + "</refAdd>\n"
-        xmlstring += "</InternalSymbols>\n"
+            xmlstring += b"<refName>" + word[0].encode("utf-8") + b"</refName>"
+            xmlstring += b"<refAdd>" + struct.pack(">I", word[1]) + b"</refAdd>"
 
-        '''
-        This block reads each line and determines if an instruction has been found.
-        
-        
-        '''
+        xmlstring += b"</InternalSymbols>"
+
+        # Now we can put the xml string together with the masterString to output to file
         xmlstring += masterString
         print(external_list)
         print(internal_list)
-        file = open(outputFile, mode="w")
+        file = open(outputFile, mode="wb")
         file.write(xmlstring)
         file.close()
 
