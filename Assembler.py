@@ -5,6 +5,7 @@ import os
 import re
 from Instruction import Instruction
 from instructionBuilder import instructionBuilder
+from instructionTree import InstructionTree
 from OperationDescription import operationDescription
 from Constants import REGISTER_PREFIX, \
                       IMMEDIATE_PREFIX, \
@@ -38,7 +39,7 @@ class Assembler:
 
     def __init__(self, inputFile=None, outputFile=None):
 
-        build = instructionBuilder()  # instructionBuilder object which will return the binary code for instructions
+        build = InstructionTree()  # instructionBuilder object which will return the binary code for instructions
         masterString = b""  # String that will eventually be our output file
         xmlstring = b""  # String that will contain the "xml" data at the beginning of the .o file
         global_list = []  # Temporary list to hold the names of global(external) symbols
@@ -84,6 +85,9 @@ class Assembler:
 
                     elif label_flag == 2:
                         global_list.append(instruction)
+
+                    elif label_flag == 3:
+                        pass
 
                     else:
                         print("Something went horribly wrong")

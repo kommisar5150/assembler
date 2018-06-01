@@ -35,7 +35,7 @@ def main():
 
         split_line = line.split(" ", 2)
         current_line += 1
-        print (split_line)
+        print(split_line)
         # if the line has fewer than necessary arguments and it's not an empty line, print an error.
         if line[0] != "\n" and len(split_line) < 3:
             print("invalid argument at line " + str(current_line))
@@ -64,9 +64,10 @@ def main():
                 if line_index > 1:
                     complete_string += str(string_chunks) + " "
                 line_index += 1
-
+            complete_string = complete_string[:-2]
             # tuple stores position to print string, length of string, and string itself
             pos_length_tuple = (str(offsetpos), str(len(complete_string)), complete_string)
+            print(pos_length_tuple[1])
             printargs.append(pos_length_tuple)
 
             # now we can assemble the dataAlpha symbol to be added to the end of the assembly file
