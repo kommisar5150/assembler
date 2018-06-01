@@ -31,6 +31,8 @@ from Configuration import REGISTER_A, \
                           REGISTER_S, \
                           REGISTER_S2
 
+import struct
+
 
 class InstructionTree:
 
@@ -56,9 +58,11 @@ class InstructionTree:
             return label, self.relativeAddressCounter, 2
 
         elif data_identifier[0] == ";":
+            # Just a comment, we simply ignore
             return "", "", 3
 
         elif line[0] == ".DATAALPHA":
+            # DataAlpha text, which must be converted into bytestring
             text = text.split(maxsplit=1)
             instruction += text.encode("utf-8")
             self.relativeAddressCounter += len(instruction) + 1
@@ -66,7 +70,8 @@ class InstructionTree:
             return instruction, self.relativeAddressCounter, 0
 
         elif line[0] == ".DATANUMERIC":
-            instruction += str(line[1])
+            # DataNumeric number which must be converted to binary
+            instruction += struct.pack(">I", (line[1]))
             self.relativeAddressCounter += 4
             return instruction, self.relativeAddressCounter, 0
 
@@ -79,6 +84,10 @@ class InstructionTree:
         elif line[0] in INSTRUCTION_LIST:
             labelFlag = 0
 
+            # We build our instruction's form by verifying each argument after the instruction
+            # This will allow us to determine which "state" the instruction belongs to.
+            # For example, "INSREGREG" means an instruction followed by two registers as arguments.
+            # This would give us STATE2, and the appropriate instruction has its distinct binary code
             for arg in line[1:]:
                 if arg[0] == "$":
                     form += "REG"
@@ -90,25 +99,30 @@ class InstructionTree:
                     form += "WIDTH"
                 else:
                     form += "IMM"
+                arglist.append(arg)                  # We store the arguments to use later when building our binary code
 
-                arglist.append(arg)
-
-            state = self._definestate(form)
+            state = self._definestate(form)     # Here we determine which state the instruction belongs to based on form
 
             for ins in state:
 
+                # Iterate through each instruction for that particular state.
+                # Once the instruction has a match, we now have our binary code and offset
                 if line[0] == ins[0]:
                     instruction += bytes((ins[1],))
                     self.relativeAddressCounter += ins[2]
                     found = True
 
             if not found:
-                raise ValueError("Invalid instruction format")  # theoretically this shouldn't happen
+                # Theoretically this shouldn't happen, but it's a sort of safety net
+                raise ValueError("Invalid instruction format")
 
             if state == STATE0:
                 # Instruction is already complete
                 pass
 
+            # Finally we evaluate how we will build our binary code. Each state has a distinct pattern we must follow
+            # For example, since we are building instructions as bytes, we can't simply assemble an 8bit instruction
+            # with a 4bit register code. Here we would need to pad the register with four 0s to complete the byte
             elif state == STATE1:
                 register = self.translateRegisterNameToRegisterCode(arglist[0][1:])
                 instruction += bytes(0b0000) + bytes((register,))
@@ -143,17 +157,24 @@ class InstructionTree:
             elif state == STATE7:
                 width = arglist[0][1:-1]
                 register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+                immediate = self.translateTextImmediateToImmediate(arglist[2][1:])
+                instruction += bytes((width,)) + bytes((register,)) + bytes((immediate,))
+
+            elif state == STATE8:
+                width = arglist[0][1:-1]
+                register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
                 register2 = self.translateRegisterNameToRegisterCode(arglist[2][1:])
                 instruction += bytes((width,)) + bytes((register,)) + bytes(0b0000) + bytes((register2,))
 
-            elif state == STATE8:
-                pass
-
             elif state == STATE9:
-                pass
+                flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
+                immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
+                instruction += bytes((flag,)) + bytes(0b0000) + bytes((immediate,))
 
             elif state == STATE10:
-                pass
+                flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
+                register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+                instruction += bytes((flag,)) + bytes((register,))
 
         else:
             # Nothing was valid in the first argument
@@ -164,12 +185,11 @@ class InstructionTree:
     def translateRegisterNameToRegisterCode(self, registerName: str=""):
         """
         This takes a register name and returns a register code as per:
-            A = 0b00
-            B = 0b01
-            C = 0b10
-            ...
-            S = 0b111
-        Throws error if register is not A-G, or S
+            A = 0b0000
+            B = 0b0001
+            C = 0b0010
+            etc...
+        Throws error if register is not valid
         :param registerName: str, representing the register that needs translation
         :return: int, the int that represents the register
         """
