@@ -45,7 +45,7 @@ class Parser:
         found = False                                          # Flag to indicate if instruction was found in state list
         form = "INS"                                                    # We assume the first argument is an instruction
         labelFlag = 0                # Used by the assembler to determine if we return a memory reference or instruction
-        data_identifier = line[0].upper()                # used for special identifiers such as .dataAlpha, comments etc
+        data_identifier = line[0].upper()               # used for special identifiers such as .dataAlpha, comments etc.
 
         # First off, we need to determine if this line has a label or global label to be referenced
         # If so, we can simply return to the Assembler class with the label, the offset, and the appropriate flag
@@ -83,6 +83,7 @@ class Parser:
             return instruction, self.relativeAddressCounter, 0
 
         # Next we check if the first item on the line is an instruction
+        # If we make it to this line, there were no data indicators (.dataAlpha, comments, labels etc.)
         elif line[0].upper() in INSTRUCTION_LIST:
 
             line = text.upper()
