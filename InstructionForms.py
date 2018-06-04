@@ -54,3 +54,5 @@ INSTRUCTION_LIST = ["ACTI", "ADD", "AND", "CALL", "CMP", "DACTI", "DIV", "HIRET"
                     "INT", "JMP", "JMPR", "MEMR", "MEMW", "MOV", "MUL", "NOP", "NOT", "NOP",
                     "OR", "POP", "PUSH", "RET", "SFSTOR", "SIVR", "SHL", "SHR", "SUB", "XOR"]
 
+IDENTIFIER_LIST = [":", ".GLOBAL", ".DATAALPHA", ".DATANUMERIC", ".DATAMEMREF", ";"]
+

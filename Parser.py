@@ -11,7 +11,8 @@ from InstructionForms import STATE0, \
                              STATE8, \
                              STATE9, \
                              STATE10, \
-                             INSTRUCTION_LIST
+                             INSTRUCTION_LIST, \
+                             IDENTIFIER_LIST
 
 from Configuration import REGISTER_A, \
                           REGISTER_B, \
@@ -45,47 +46,18 @@ class Parser:
         found = False                                          # Flag to indicate if instruction was found in state list
         form = "INS"                                                    # We assume the first argument is an instruction
         labelFlag = 0                # Used by the assembler to determine if we return a memory reference or instruction
-        data_identifier = line[0].upper()               # used for special identifiers such as .dataAlpha, comments etc.
+        dataIdentifier = line[0].upper()               # used for special identifiers such as .dataAlpha, comments etc.
 
-        # First off, we need to determine if this line has a label or global label to be referenced
-        # If so, we can simply return to the Assembler class with the label, the offset, and the appropriate flag
-        if data_identifier[-1] == ":":
-            label = data_identifier[:-1]
-            return label, self.relativeAddressCounter, 1
+        if dataIdentifier in IDENTIFIER_LIST or dataIdentifier[-1] == ":":
+            # First off, we need to determine if this line has a label or global label to be referenced
+            # If so, we can simply return to the Assembler class with the label, the offset, and the appropriate flag
+            instruction, labelFlag = self._evaluateIndicatorData(text, dataIdentifier, line, instruction, labelFlag)
 
-        elif data_identifier == ".GLOBAL":
-            # Global (external) label that can be used by other files
-            label = line[1].upper()
-            return label, self.relativeAddressCounter, 2
+            return instruction, self.relativeAddressCounter, labelFlag
 
-        elif data_identifier[0] == ";":
-            # Just a comment, we simply ignore
-            return "", "", 3
-
-        elif data_identifier == ".DATAALPHA":
-            # DataAlpha text, which must be converted into bytestring
-            text = text.split(maxsplit=1)
-            instruction += text.encode("utf-8")
-            self.relativeAddressCounter += len(instruction) + 1
-            instruction += b"\x00"
-            return instruction, self.relativeAddressCounter, 0
-
-        elif data_identifier == ".DATANUMERIC":
-            # DataNumeric number which must be converted to binary
-            instruction += struct.pack(">I", (line[1]))
-            self.relativeAddressCounter += 4
-            return instruction, self.relativeAddressCounter, 0
-
-        elif data_identifier == ".DATAMEMREF":
-            # Memory reference, label will be returned as the instruction
-            instruction += str(line[1].upper())
-            self.relativeAddressCounter += 4
-            return instruction, self.relativeAddressCounter, 0
-
-        # Next we check if the first item on the line is an instruction
-        # If we make it to this line, there were no data indicators (.dataAlpha, comments, labels etc.)
         elif line[0].upper() in INSTRUCTION_LIST:
-
+            # Next we check if the first item on the line is an instruction
+            # If we make it to this line, there were no data indicators (.dataAlpha, comments, labels etc.)
             line = text.upper()
             line = line.split()
             labelFlag = 0
@@ -94,18 +66,7 @@ class Parser:
             # This will allow us to determine which "state" the instruction belongs to.
             # For example, "INSREGREG" means an instruction followed by two registers as arguments.
             # This would give us STATE2, and the instruction has its distinct binary code
-            for arg in line[1:]:
-                if arg[0] == "$":
-                    form += "REG"
-                elif arg[0] == "#":
-                    form += "IMM"
-                elif arg[0] == "<" and arg[-1] == ">":
-                    form += "FLAG"
-                elif arg[0] == "[" and arg[-1] == "]":
-                    form += "WIDTH"
-                else:
-                    form += "IMM"
-                arglist.append(arg)                  # We store the arguments to use later when building our binary code
+            form, arglist = self._evaluateFormBasedOnArguments(line, form, arglist)
 
             state = self._definestate(form)     # Here we determine which state the instruction belongs to based on form
 
@@ -128,6 +89,194 @@ class Parser:
             instruction = self._buildBinaryCodeFromInstructionAndArguments(state, arglist, instruction)
 
         return instruction, self.relativeAddressCounter, labelFlag
+
+    def _definestate(self, form):
+        """
+        Takes in the form based on instruction and its arguments and determines which form it belongs to.
+        This state contains all possible instructions for that particular form.
+        :param form:
+        :return: The appropriate state for the instruction form
+        """
+
+        if form == "INS":
+            form = STATE0
+        elif form == "INSREG":
+            form = STATE1
+        elif form == "INSREGREG":
+            form = STATE2
+        elif form == "INSIMM":
+            form = STATE3
+        elif form == "INSIMMREG":
+            form = STATE4
+        elif form == "INSWIDTHIMMIMM":
+            form = STATE5
+        elif form == "INSWIDTHIMMREG":
+            form = STATE6
+        elif form == "INSWIDTHREGIMM":
+            form = STATE7
+        elif form == "INSWIDTHREGREG":
+            form = STATE8
+        elif form == "INSFLAGIMM":
+            form = STATE9
+        elif form == "INSFLAGREG":
+            form = STATE10
+
+        else:
+            # too many arguments or arguments don't fit any description
+            raise ValueError("Invalid instruction format")
+
+        return form
+
+    def _evaluateIndicatorData(self, text, dataIdentifier, line, instruction, labelFlag):
+        """
+        This method indicates that we are NOT dealing with an instruction, and that we must parse data for a string,
+        numeric value, a comment, a label, or global reference.
+        :param text:
+        :param dataIdentifier:
+        :param line:
+        :param instruction:
+        :param labelFlag:
+        :return: Instruction containing relevant data, and the appropriate flag to be used by the assembler
+        """
+        if dataIdentifier[-1] == ":":
+            instruction = dataIdentifier[:-1]
+            labelFlag = 1
+
+        elif dataIdentifier == ".GLOBAL":
+            # Global (external) label that can be used by other files
+            instruction = line[1].upper()
+            labelFlag = 2
+
+        elif dataIdentifier[0] == ";":
+            # Just a comment, we simply ignore
+            instruction = ""
+            labelFlag = 3
+
+        elif dataIdentifier == ".DATAALPHA":
+            # DataAlpha text, which must be converted into bytestring
+            text = text.split(maxsplit=1)
+            instruction += text.encode("utf-8")
+            self.relativeAddressCounter += len(instruction) + 1
+            instruction += b"\x00"
+
+        elif dataIdentifier == ".DATANUMERIC":
+            # DataNumeric number which must be converted to binary
+            instruction += struct.pack(">I", (line[1]))
+            self.relativeAddressCounter += 4
+
+        elif dataIdentifier == ".DATAMEMREF":
+            # Memory reference, label will be returned as the instruction
+            instruction += str(line[1].upper())
+            self.relativeAddressCounter += 4
+
+        return instruction, labelFlag
+
+    def _evaluateFormBasedOnArguments(self, line, form, arglist):
+        """
+        Method looks at the whole line after the initial instruction and determines its form based on the arguments.
+        Registers are concatenated as "REG", immediates and lables as "IMM", etc. We also populate a list of arguments
+        as they are to be constructed into binary code later.
+        :param line:
+        :param form:
+        :param arglist:
+        :return: Fully constructed form and newly populated list of arguments
+        """
+
+        for arg in line[1:]:
+            if arg[0] == "$":
+                form += "REG"
+            elif arg[0] == "#":
+                form += "IMM"
+            elif arg[0] == "<" and arg[-1] == ">":
+                form += "FLAG"
+            elif arg[0] == "[" and arg[-1] == "]":
+                form += "WIDTH"
+            else:
+                form += "IMM"
+            arglist.append(arg)                      # We store the arguments to use later when building our binary code
+
+        return form, arglist
+
+    def _buildBinaryCodeFromInstructionAndArguments(self, state, arglist, instruction):
+        """
+        This is the last step in parsing a line of code: assembling the actual binary code. Each state has a particular
+        structure that is needed to be read correctly by the Capua VM. This method takes care of every form and gets
+        the binary values for each register and immediate value. Labels are converted to bytestring as they are.
+        :param state:
+        :param arglist:
+        :param instruction:
+        :return: The newly built binary code for the instruction and arguments
+        """
+
+        if state == STATE0:
+            # Instruction is already complete, there is only one argument (the instruction itself)
+            pass
+
+        elif state == STATE1:
+            register = self.translateRegisterNameToRegisterCode(arglist[0][1:])
+            instruction += bytes(0b0000) + bytes((register,))
+
+        elif state == STATE2:
+            register = self.translateRegisterNameToRegisterCode(arglist[0][1:])
+            register2 = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+            register = (register << 4) + register2
+            instruction += bytes((register,))
+
+        elif state == STATE3:
+            if arglist[0][0] == "#":
+                immediate = self.translateTextImmediateToImmediate(arglist[0][1:])
+                instruction += immediate.to_bytes(4, byteorder='big')
+            else:
+                instruction += b':' + arglist[0].encode("utf-8") + b':'
+
+        elif state == STATE4:
+            immediate = self.translateTextImmediateToImmediate(arglist[0][1:])
+            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+            instruction += immediate.to_bytes(4, byteorder='big') + bytes(0b0000) + bytes((register,))
+
+        elif state == STATE5:
+            width = arglist[0][1:-1]
+            immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
+            immediate2 = self.translateTextImmediateToImmediate(arglist[2][1:])
+            instruction += bytes(0b0000) + bytes((width,)) + immediate.to_bytes(4, byteorder='big') + \
+                           immediate2.to_bytes(4, byteorder='big')
+
+        elif state == STATE6:
+            width = arglist[0][1:-1]
+            immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
+            register = self.translateRegisterNameToRegisterCode(arglist[2][1:])
+            instruction += bytes((width,)) + bytes((register,)) + immediate.to_bytes(4, byteorder='big')
+
+        elif state == STATE7:
+            width = arglist[0][1:-1]
+            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+            immediate = self.translateTextImmediateToImmediate(arglist[2][1:])
+            instruction += bytes((width,)) + bytes((register,)) + immediate.to_bytes(4, byteorder='big')
+
+        elif state == STATE8:
+            width = arglist[0][1:-1]
+            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+            register2 = self.translateRegisterNameToRegisterCode(arglist[2][1:])
+            instruction += bytes((width,)) + bytes((register,)) + bytes(0b0000) + bytes((register2,))
+
+        elif state == STATE9:
+            flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
+            if arglist[1][0] == "#":
+                immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
+                instruction += bytes((flag,)) + bytes(0b0000) + immediate.to_bytes(4, byteorder='big')
+            else:
+                instruction += bytes((flag,)) + bytes(0b0000) + b':' + arglist[1].encode("utf-8") + b':'
+
+        elif state == STATE10:
+            flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
+            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
+            instruction += bytes((flag,)) + bytes((register,))
+
+        else:
+            # Nothing was valid in the first argument
+            raise ValueError("Invalid instruction format")
+
+        return instruction
 
     def translateRegisterNameToRegisterCode(self, registerName: str=""):
         """
@@ -253,121 +402,3 @@ class Parser:
             raise ValueError("Invalid conditional flag detected {} was provided but is invalid".format(originalFlags))
 
         return codeFlags
-
-    def _definestate(self, form):
-        """
-        Takes in the form based on instruction and its arguments and determines which form it belongs to.
-        This state contains all possible instructions for that particular form.
-        :param form:
-        :return: The appropriate state for the instruction form
-        """
-
-        if form == "INS":
-            form = STATE0
-        elif form == "INSREG":
-            form = STATE1
-        elif form == "INSREGREG":
-            form = STATE2
-        elif form == "INSIMM":
-            form = STATE3
-        elif form == "INSIMMREG":
-            form = STATE4
-        elif form == "INSWIDTHIMMIMM":
-            form = STATE5
-        elif form == "INSWIDTHIMMREG":
-            form = STATE6
-        elif form == "INSWIDTHREGIMM":
-            form = STATE7
-        elif form == "INSWIDTHREGREG":
-            form = STATE8
-        elif form == "INSFLAGIMM":
-            form = STATE9
-        elif form == "INSFLAGREG":
-            form = STATE10
-
-        else:
-            # too many arguments or arguments don't fit any description
-            raise ValueError("Invalid instruction format")
-
-        return form
-
-    def _buildBinaryCodeFromInstructionAndArguments(self, state, arglist, instruction):
-        """
-        This is the last step in parsing a line of code: assembling the actual binary code. Each state has a particular
-        structure that is needed to be read correctly by the Capua VM. This method takes care of every form and gets
-        the binary values for each register and immediate value. Labels are converted to bytestring as they are.
-        :param state:
-        :param arglist:
-        :param instruction:
-        :return: The newly built binary code for the instruction and arguments
-        """
-
-        if state == STATE0:
-            # Instruction is already complete, there is only one argument (the instruction itself)
-            pass
-
-        elif state == STATE1:
-            register = self.translateRegisterNameToRegisterCode(arglist[0][1:])
-            instruction += bytes(0b0000) + bytes((register,))
-
-        elif state == STATE2:
-            register = self.translateRegisterNameToRegisterCode(arglist[0][1:])
-            register2 = self.translateRegisterNameToRegisterCode(arglist[1][1:])
-            register = (register << 4) + register2
-            instruction += bytes((register,))
-
-        elif state == STATE3:
-            if arglist[0][0] == "#":
-                immediate = self.translateTextImmediateToImmediate(arglist[0][1:])
-                instruction += immediate.to_bytes(4, byteorder='big')
-            else:
-                instruction += b':' + arglist[0].encode("utf-8") + b':'
-
-        elif state == STATE4:
-            immediate = self.translateTextImmediateToImmediate(arglist[0][1:])
-            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
-            instruction += immediate.to_bytes(4, byteorder='big') + bytes(0b0000) + bytes((register,))
-
-        elif state == STATE5:
-            width = arglist[0][1:-1]
-            immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
-            immediate2 = self.translateTextImmediateToImmediate(arglist[2][1:])
-            instruction += bytes(0b0000) + bytes((width,)) + immediate.to_bytes(4, byteorder='big') + \
-                           immediate2.to_bytes(4, byteorder='big')
-
-        elif state == STATE6:
-            width = arglist[0][1:-1]
-            immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
-            register = self.translateRegisterNameToRegisterCode(arglist[2][1:])
-            instruction += bytes((width,)) + bytes((register,)) + immediate.to_bytes(4, byteorder='big')
-
-        elif state == STATE7:
-            width = arglist[0][1:-1]
-            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
-            immediate = self.translateTextImmediateToImmediate(arglist[2][1:])
-            instruction += bytes((width,)) + bytes((register,)) + immediate.to_bytes(4, byteorder='big')
-
-        elif state == STATE8:
-            width = arglist[0][1:-1]
-            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
-            register2 = self.translateRegisterNameToRegisterCode(arglist[2][1:])
-            instruction += bytes((width,)) + bytes((register,)) + bytes(0b0000) + bytes((register2,))
-
-        elif state == STATE9:
-            flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
-            if arglist[1][0] == "#":
-                immediate = self.translateTextImmediateToImmediate(arglist[1][1:])
-                instruction += bytes((flag,)) + bytes(0b0000) + immediate.to_bytes(4, byteorder='big')
-            else:
-                instruction += bytes((flag,)) + bytes(0b0000) + b':' + arglist[1].encode("utf-8") + b':'
-
-        elif state == STATE10:
-            flag = self.translateTextFlagsToCodeFlags(arglist[0][1:-1])
-            register = self.translateRegisterNameToRegisterCode(arglist[1][1:])
-            instruction += bytes((flag,)) + bytes((register,))
-
-        else:
-            # Nothing was valid in the first argument
-            raise ValueError("Invalid instruction format")
-
-        return instruction
