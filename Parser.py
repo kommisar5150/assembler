@@ -39,6 +39,12 @@ class Parser:
     relativeAddressCounter = 0                # Used to determine memory address of a label at a given point in the file
 
     def build(self, text):
+        """
+        This is the main driver method for the parser. It takes in an individual line of code, parses the info and
+        sends the fully built binary code to the assembler, or returns a memory reference with the appropriate offset.
+        :param text: The line of text as read from the file
+        :return: The encoded binary instruction for the line, the current offset, and the label flag used by assembler
+        """
 
         line = text.split()                     # We split the line with space as a delimiter. Each token is an argument
         instruction = b""                                                  # Instruction will be written as a bytestring
@@ -94,7 +100,7 @@ class Parser:
         """
         Takes in the form based on instruction and its arguments and determines which form it belongs to.
         This state contains all possible instructions for that particular form.
-        :param form:
+        :param form: The form of the instruction based on its arguments (ex: instruction-register-immediate)
         :return: The appropriate state for the instruction form
         """
 
@@ -131,11 +137,11 @@ class Parser:
         """
         This method indicates that we are NOT dealing with an instruction, and that we must parse data for a string,
         numeric value, a comment, a label, or global reference.
-        :param text:
-        :param dataIdentifier:
-        :param line:
-        :param instruction:
-        :param labelFlag:
+        :param text: The raw line of text as read from the file directly
+        :param dataIdentifier: The first argument of the line, used to determine which identifier we're dealing with
+        :param line: The line split into individual arguments using a space delimiter by default
+        :param instruction: Will contain the piece of data based on the appropriate identifier
+        :param labelFlag: Used by Assembler to determine if we return a label, global reference, or data/instruction
         :return: Instruction containing relevant data, and the appropriate flag to be used by the assembler
         """
         if dataIdentifier[-1] == ":":
@@ -176,9 +182,9 @@ class Parser:
         Method looks at the whole line after the initial instruction and determines its form based on the arguments.
         Registers are concatenated as "REG", immediates and lables as "IMM", etc. We also populate a list of arguments
         as they are to be constructed into binary code later.
-        :param line:
-        :param form:
-        :param arglist:
+        :param line: Line split into individual arguments
+        :param form: Initially only contains "INS", but will be built up based on arguments on the line in this method
+        :param arglist: Will contain our list of arguments to be used later when assembling our binary code
         :return: Fully constructed form and newly populated list of arguments
         """
 
@@ -196,15 +202,15 @@ class Parser:
             arglist.append(arg)                      # We store the arguments to use later when building our binary code
 
         return form, arglist
-
+    # TODO: Fix labels as immediate values, as they can only be interpreted by certain instructions using immediates
     def _buildBinaryCodeFromInstructionAndArguments(self, state, arglist, instruction):
         """
         This is the last step in parsing a line of code: assembling the actual binary code. Each state has a particular
         structure that is needed to be read correctly by the Capua VM. This method takes care of every form and gets
         the binary values for each register and immediate value. Labels are converted to bytestring as they are.
-        :param state:
-        :param arglist:
-        :param instruction:
+        :param state: State of the instruction based on evaluated form (ex: instruction-register = STATE1)
+        :param arglist: List of arguments to be converted to binary code and assembled based on state's structure
+        :param instruction: Our final binary code to be returned to the assembler
         :return: The newly built binary code for the instruction and arguments
         """
 
